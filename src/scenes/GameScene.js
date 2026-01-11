@@ -53,7 +53,7 @@ const CONFIG = {
             scale: 10,
             points: 1000,
             shootInterval: 1500,
-            spawnKillCount: 10
+            spawnKillCount: 25
         },
         kraken: {
             health: 120,
@@ -249,8 +249,11 @@ export class GameScene extends Phaser.Scene {
         // Pause menu setup
         this.createPauseMenu();
 
-        // ESC key to pause
+        // ESC or P key to pause
         this.input.keyboard.on('keydown-ESC', () => {
+            this.togglePause();
+        });
+        this.input.keyboard.on('keydown-P', () => {
             this.togglePause();
         });
     }
@@ -318,7 +321,7 @@ export class GameScene extends Phaser.Scene {
         });
 
         // Instructions
-        const hint = this.add.text(width / 2, height - 60, 'Press ESC to resume', {
+        const hint = this.add.text(width / 2, height - 60, 'Press ESC or P to resume', {
             fontFamily: 'Courier New, monospace',
             fontSize: '16px',
             color: '#888888'
@@ -733,25 +736,30 @@ export class GameScene extends Phaser.Scene {
         const { width, height } = this.cameras.main;
         this.bossActive = true;
 
-        // Warning
-        const warning = this.add.text(width / 2, height / 2, 'MEGA SHARK!', {
-            fontSize: '40px',
+        // 3-second flashing warning
+        const warning = this.add.text(width / 2, height / 2, 'WARNING\nMegalodon approaching', {
+            fontSize: '36px',
             fontStyle: 'bold',
             color: '#ff0000',
             stroke: '#000',
-            strokeThickness: 4
+            strokeThickness: 4,
+            align: 'center'
         }).setOrigin(0.5).setDepth(400);
 
+        // Flashing effect for 3 seconds
         this.tweens.add({
             targets: warning,
-            alpha: 0,
-            scaleX: 1.5,
-            scaleY: 1.5,
-            duration: 2000,
-            onComplete: () => warning.destroy()
+            alpha: 0.2,
+            duration: 200,
+            yoyo: true,
+            repeat: 7,
+            onComplete: () => {
+                warning.destroy();
+            }
         });
 
-        this.time.delayedCall(1500, () => {
+        // Spawn boss after 3 seconds
+        this.time.delayedCall(3000, () => {
             this.boss = this.add.sprite(width + 100, height / 2, 'shark')
                 .setDepth(80)
                 .setScale(10)
@@ -771,7 +779,7 @@ export class GameScene extends Phaser.Scene {
             this.bossHealthBar.setDepth(500);
             this.updateBossHealthBar();
 
-            this.bossName = this.add.text(width / 2, 80, 'MEGA SHARK', {
+            this.bossName = this.add.text(width / 2, 80, 'MEGALODON', {
                 fontSize: '20px',
                 fontStyle: 'bold',
                 color: '#ff4444',
@@ -795,25 +803,30 @@ export class GameScene extends Phaser.Scene {
         this.secondBossActive = true;
         this.bossActive = true;
 
-        // Warning
-        const warning = this.add.text(width / 2, height / 2, 'KRAKEN RISES!', {
-            fontSize: '40px',
+        // 3-second flashing warning
+        const warning = this.add.text(width / 2, height / 2, 'WARNING\nKraken approaching', {
+            fontSize: '36px',
             fontStyle: 'bold',
-            color: '#00ff88',
+            color: '#ff0000',
             stroke: '#000',
-            strokeThickness: 4
+            strokeThickness: 4,
+            align: 'center'
         }).setOrigin(0.5).setDepth(400);
 
+        // Flashing effect for 3 seconds
         this.tweens.add({
             targets: warning,
-            alpha: 0,
-            scaleX: 1.5,
-            scaleY: 1.5,
-            duration: 2000,
-            onComplete: () => warning.destroy()
+            alpha: 0.2,
+            duration: 200,
+            yoyo: true,
+            repeat: 7,
+            onComplete: () => {
+                warning.destroy();
+            }
         });
 
-        this.time.delayedCall(1500, () => {
+        // Spawn boss after 3 seconds
+        this.time.delayedCall(3000, () => {
             this.secondBoss = this.add.sprite(width + 100, height / 2, 'octopus')
                 .setDepth(80)
                 .setScale(8)
@@ -1372,7 +1385,7 @@ export class GameScene extends Phaser.Scene {
             });
         }
 
-        const victory = this.add.text(400, 300, 'MEGASHARK DEFEATED!\n+1000', {
+        const victory = this.add.text(400, 300, 'MEGALODON DEFEATED!\n+1000', {
             fontSize: '36px', fontStyle: 'bold', color: '#ffff00', stroke: '#000', strokeThickness: 4, align: 'center'
         }).setOrigin(0.5).setDepth(500);
         this.tweens.add({ targets: victory, scale: 1.3, alpha: 0, duration: 2000, onComplete: () => victory.destroy() });

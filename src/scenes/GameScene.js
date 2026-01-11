@@ -34,7 +34,10 @@ const CONFIG = {
         swordfish: { speed: 4, points: 75, hitRadius: 30, health: 1, scale: 2, groupSize: { min: 3, max: 5 }, spacing: 60 },
         angler: { speed: 1.5, points: 100, hitRadius: 30, health: 1, scale: 2 },
         squid: { speed: 5, points: 100, hitRadius: 15, health: 1, scale: 2 },
-        sawshark: { speed: 2, points: 150, hitRadius: 25, health: 1, scale: 2 }
+        sawshark: { speed: 2, points: 150, hitRadius: 25, health: 1, scale: 2 },
+        fishbig: { speed: 1.8, points: 80, hitRadius: 25, health: 2, scale: 2 },
+        fishdart: { speed: 6, points: 60, hitRadius: 12, health: 1, scale: 2 },
+        fish: { speed: 2.5, points: 40, hitRadius: 15, health: 1, scale: 2 }
     },
 
     mines: {
@@ -67,9 +70,18 @@ const CONFIG = {
     // Powerup settings
     powerups: {
         firepower: { duration: 10000 },
-        speed: { duration: 8000 },
         shield: { duration: 6000 },
-        fireball: { duration: 8000 }
+        fireball: { duration: 8000 },
+        companion: { duration: 12000 }
+    },
+
+    // Companion fish settings
+    companion: {
+        offsetY: -40,
+        shootInterval: 400,
+        bubbleSpeed: 10,
+        bubbleHitRadius: 8,
+        scale: 2.5
     },
 
     // Spawn timers (ms)
@@ -138,6 +150,8 @@ export class GameScene extends Phaser.Scene {
         this.lastFired = 0;
         this.gameTime = 0;
         this.enemiesKilled = 0;
+        this.currentLevel = 1;
+        this.levelStarted = false;
         this.bossActive = false;
         this.bossDefeated = false;
         this.secondBossActive = false;
@@ -149,6 +163,13 @@ export class GameScene extends Phaser.Scene {
         this.isMobile = false;
         this.touchTarget = null;
         this.isPaused = false;
+        this.mineWaveTriggered = false;
+        this.godMode = false;
+
+        // Companion state
+        this.companionActive = false;
+        this.companion = null;
+        this.lastCompanionShot = 0;
 
         // Combo system state
         this.comboCount = 0;
@@ -172,6 +193,7 @@ export class GameScene extends Phaser.Scene {
         // Groups
         this.bullets = this.add.group();
         this.fireballs = this.add.group();
+        this.bubbles = this.add.group();
         this.collectibles = this.add.group();
         this.enemies = this.add.group();
         this.powerups = this.add.group();
@@ -273,6 +295,9 @@ export class GameScene extends Phaser.Scene {
         // Fade in
         this.cameras.main.fadeIn(500);
 
+        // Show Level 1 indicator
+        this.showLevelIndicator(1);
+
         // Pause menu setup
         this.createPauseMenu();
 
@@ -282,6 +307,17 @@ export class GameScene extends Phaser.Scene {
         });
         this.input.keyboard.on('keydown-P', () => {
             this.togglePause();
+        });
+
+        // Secret god mode toggle
+        this.input.keyboard.on('keydown-G', () => {
+            this.godMode = !this.godMode;
+            const msg = this.add.text(400, 200, this.godMode ? 'GOD MODE ON' : 'GOD MODE OFF', {
+                fontSize: '24px', fontStyle: 'bold',
+                color: this.godMode ? '#ffff00' : '#888888',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5).setDepth(600);
+            this.tweens.add({ targets: msg, alpha: 0, y: 170, duration: 1000, onComplete: () => msg.destroy() });
         });
     }
 
@@ -562,6 +598,15 @@ export class GameScene extends Phaser.Scene {
             strokeThickness: 3
         }).setDepth(500);
 
+        // Level indicator
+        this.levelText = this.add.text(20, 50, 'Level 1', {
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            color: '#00ffff',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setDepth(500);
+
         // Health bar
         this.healthBar = this.add.graphics();
         this.healthBar.setDepth(500);
@@ -573,16 +618,16 @@ export class GameScene extends Phaser.Scene {
             color: '#88ccff'
         }).setDepth(500);
 
-        // Combo UI
-        this.comboContainer = this.add.container(width / 2, 50).setDepth(500);
+        // Combo UI (smaller and positioned in corner)
+        this.comboContainer = this.add.container(width - 80, 100).setDepth(500);
         this.comboContainer.setAlpha(0);
 
         this.comboText = this.add.text(0, 0, '', {
             fontFamily: 'Impact, Arial Black, sans-serif',
-            fontSize: '32px',
+            fontSize: '16px',
             color: '#ffff00',
             stroke: '#000000',
-            strokeThickness: 4
+            strokeThickness: 2
         }).setOrigin(0.5);
         this.comboContainer.add(this.comboText);
 
@@ -616,6 +661,87 @@ export class GameScene extends Phaser.Scene {
         if (this.cache.audio.exists('sfx-hurt')) {
             this.sfxHurt = this.sound.add('sfx-hurt', { volume: CONFIG.audio.sfxVolume });
         }
+    }
+
+    /**
+     * Shows a level indicator at the start of a level
+     */
+    showLevelIndicator(level) {
+        const { width, height } = this.cameras.main;
+
+        const levelNames = {
+            1: 'THE DEPTHS',
+            2: 'THE ABYSS'
+        };
+
+        // Create container for level indicator
+        const container = this.add.container(width / 2, height / 2).setDepth(600);
+
+        // Background panel
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000000, 0.7);
+        bg.fillRoundedRect(-200, -80, 400, 160, 20);
+        container.add(bg);
+
+        // Level text
+        const levelText = this.add.text(0, -40, `LEVEL ${level}`, {
+            fontFamily: 'Impact, Arial Black, sans-serif',
+            fontSize: '48px',
+            color: level === 1 ? '#00ffff' : '#ff00ff',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        container.add(levelText);
+
+        // Level name
+        const nameText = this.add.text(0, 20, levelNames[level] || '', {
+            fontFamily: 'Courier New, monospace',
+            fontSize: '24px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
+        container.add(nameText);
+
+        // Enemies hint
+        const enemies = level === 1
+            ? 'Jellyfish • Swordfish • Fish'
+            : 'Anglers • Squid • Sawshark • Dart Fish';
+        const enemiesText = this.add.text(0, 55, enemies, {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#aaaaaa'
+        }).setOrigin(0.5);
+        container.add(enemiesText);
+
+        // Animate in
+        container.setAlpha(0);
+        container.setScale(0.5);
+
+        this.tweens.add({
+            targets: container,
+            alpha: 1,
+            scale: 1,
+            duration: 500,
+            ease: 'Back.out'
+        });
+
+        // Animate out after delay
+        this.time.delayedCall(2500, () => {
+            this.tweens.add({
+                targets: container,
+                alpha: 0,
+                scale: 1.2,
+                duration: 500,
+                onComplete: () => {
+                    container.destroy();
+                    this.levelStarted = true;
+                    // Update UI level text
+                    if (this.levelText) {
+                        this.levelText.setText(`Level ${level}`);
+                        this.levelText.setColor(level === 1 ? '#00ffff' : '#ff00ff');
+                    }
+                }
+            });
+        });
     }
 
     updateHealthBar() {
@@ -681,10 +807,10 @@ export class GameScene extends Phaser.Scene {
         const colorIndex = Math.min(this.comboMultiplier - 1, colors.length - 1);
         this.comboText.setColor(colors[colorIndex]);
 
-        // Pulse effect on new combo hit
+        // Pulse effect on new combo hit (smaller)
         this.tweens.add({
             targets: this.comboText,
-            scale: 1.3,
+            scale: 1.15,
             duration: 100,
             yoyo: true,
             ease: 'Power2'
@@ -700,19 +826,19 @@ export class GameScene extends Phaser.Scene {
 
         this.comboTimer -= delta;
 
-        // Draw timer bar
-        const barWidth = 100;
-        const barHeight = 6;
+        // Draw timer bar (smaller)
+        const barWidth = 60;
+        const barHeight = 4;
         const progress = Math.max(0, this.comboTimer / CONFIG.combo.timeWindow);
 
         this.comboTimerBar.clear();
         this.comboTimerBar.fillStyle(0x333333, 0.8);
-        this.comboTimerBar.fillRoundedRect(-barWidth / 2, 20, barWidth, barHeight, 2);
+        this.comboTimerBar.fillRoundedRect(-barWidth / 2, 14, barWidth, barHeight, 2);
 
         // Color changes as timer runs out
         const timerColor = this.comboTimer < CONFIG.combo.decayWarning ? 0xff0000 : 0x00ff00;
         this.comboTimerBar.fillStyle(timerColor, 1);
-        this.comboTimerBar.fillRoundedRect(-barWidth / 2 + 1, 21, (barWidth - 2) * progress, barHeight - 2, 2);
+        this.comboTimerBar.fillRoundedRect(-barWidth / 2 + 1, 15, (barWidth - 2) * progress, barHeight - 2, 2);
 
         // Flash warning when about to expire
         if (this.comboTimer < CONFIG.combo.decayWarning && this.comboTimer > 0) {
@@ -810,7 +936,11 @@ export class GameScene extends Phaser.Scene {
 
         const { width, height } = this.cameras.main;
 
-        const enemyTypes = ['jellyfish', 'swordfish', 'angler', 'squid', 'sawshark'];
+        // Different enemies for each level
+        const level1Enemies = ['jellyfish', 'swordfish', 'fish', 'fishbig'];
+        const level2Enemies = ['angler', 'squid', 'sawshark', 'fishdart'];
+
+        const enemyTypes = this.currentLevel === 1 ? level1Enemies : level2Enemies;
         const type = enemyTypes[Phaser.Math.Between(0, enemyTypes.length - 1)];
 
         switch (type) {
@@ -828,6 +958,15 @@ export class GameScene extends Phaser.Scene {
                 break;
             case 'sawshark':
                 this.spawnSawshark(width, height);
+                break;
+            case 'fishbig':
+                this.spawnFishBigGroup(width, height);
+                break;
+            case 'fishdart':
+                this.spawnFishDartSwarm(width, height);
+                break;
+            case 'fish':
+                this.spawnFishSchool(width, height);
                 break;
         }
     }
@@ -929,6 +1068,74 @@ export class GameScene extends Phaser.Scene {
         enemy.isWave = true;
     }
 
+    /**
+     * Spawns a group of big fish in a horizontal line formation
+     */
+    spawnFishBigGroup(width, height) {
+        const count = Phaser.Math.Between(2, 4);
+        const baseY = Phaser.Math.Between(120, height - 120);
+        const spacing = 80;
+
+        for (let i = 0; i < count; i++) {
+            const enemy = this.createEnemy('fishbig', width + 50 + (i * spacing), baseY, 'fishbig-swim');
+
+            // Gentle bobbing
+            this.tweens.add({
+                targets: enemy,
+                y: baseY + Phaser.Math.Between(-20, 20),
+                duration: 1500 + (i * 200),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
+    /**
+     * Spawns a fast dart fish swarm in a V formation
+     */
+    spawnFishDartSwarm(width, height) {
+        const count = Phaser.Math.Between(5, 8);
+        const baseY = Phaser.Math.Between(100, height - 100);
+
+        for (let i = 0; i < count; i++) {
+            // V formation offset
+            const row = Math.floor(i / 2);
+            const isTop = i % 2 === 0;
+            const yOffset = isTop ? -row * 25 : row * 25;
+
+            const enemy = this.createEnemy('fishdart', width + 50 + (row * 40), baseY + yOffset, 'fishdart-swim');
+            enemy.setScale(1.5);  // Smaller scale for dart fish
+        }
+    }
+
+    /**
+     * Spawns a school of regular fish in a circular/swarm pattern
+     */
+    spawnFishSchool(width, height) {
+        const count = Phaser.Math.Between(6, 10);
+        const centerY = Phaser.Math.Between(120, height - 120);
+        const spreadRadius = 60;
+
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const offsetX = Math.cos(angle) * Phaser.Math.Between(20, spreadRadius);
+            const offsetY = Math.sin(angle) * Phaser.Math.Between(20, spreadRadius);
+
+            const enemy = this.createEnemy('fish', width + 50 + offsetX, centerY + offsetY, 'fish-swim');
+
+            // School swimming motion
+            this.tweens.add({
+                targets: enemy,
+                y: enemy.y + Phaser.Math.Between(-30, 30),
+                duration: 1000 + Phaser.Math.Between(0, 500),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
     spawnMine() {
         if (this.bossActive) return;
 
@@ -963,18 +1170,74 @@ export class GameScene extends Phaser.Scene {
         this.mines.add(mine);
     }
 
-    spawnPowerup() {
-        if (this.bossActive) return;
+    /**
+     * Spawns a large wave of mines as a warning before the boss
+     */
+    spawnMineWave() {
+        const { width, height } = this.cameras.main;
 
+        // Warning text
+        const warning = this.add.text(width / 2, height / 2, 'MINE FIELD!', {
+            fontSize: '32px',
+            fontStyle: 'bold',
+            color: '#ff6600',
+            stroke: '#000',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(400);
+
+        this.tweens.add({
+            targets: warning,
+            alpha: 0,
+            y: height / 2 - 50,
+            duration: 2000,
+            onComplete: () => warning.destroy()
+        });
+
+        // Spawn mines in waves
+        const mineCount = 15;
+        for (let i = 0; i < mineCount; i++) {
+            this.time.delayedCall(i * 200, () => {
+                const y = Phaser.Math.Between(80, height - 80);
+                const mine = this.add.image(width + 30 + Phaser.Math.Between(0, 100), y, 'mine')
+                    .setDepth(CONFIG.mines.depth)
+                    .setScale(CONFIG.mines.scale);
+
+                mine.hitRadius = CONFIG.mines.hitRadius;
+                mine.speed = CONFIG.mines.speed * 1.5;  // Faster mines
+
+                // Bobbing animation
+                this.tweens.add({
+                    targets: mine,
+                    y: y + 20,
+                    duration: 1500,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                // Rotation
+                this.tweens.add({
+                    targets: mine,
+                    rotation: Math.PI * 2,
+                    duration: 6000,
+                    repeat: -1
+                });
+
+                this.mines.add(mine);
+            });
+        }
+    }
+
+    spawnPowerup() {
         const { width, height } = this.cameras.main;
         const y = Phaser.Math.Between(80, height - 80);
 
         const types = [
             { type: 'firepower', color: 0xff6600, label: 'F' },
-            { type: 'speed', color: 0x00ff66, label: 'S' },
             { type: 'shield', color: 0x6666ff, label: 'D' },
-            { type: 'health', color: 0xff66aa, label: '+' },
-            { type: 'fireball', color: 0xff4400, label: '🔥' }
+            { type: 'health', color: 0x44ff44, label: '+' },
+            { type: 'fireball', color: 0xff4400, label: '🔥' },
+            { type: 'companion', color: 0xff88cc, label: 'C' }
         ];
         const powerupData = types[Phaser.Math.Between(0, types.length - 1)];
 
@@ -1548,6 +1811,50 @@ export class GameScene extends Phaser.Scene {
 
         // Update combo timer
         this.updateComboTimer(delta);
+
+        // Update companion
+        if (this.companionActive && this.companion) {
+            // Follow player with offset
+            this.companion.x = this.player.x - 30;
+            this.companion.y = this.player.y + CONFIG.companion.offsetY;
+
+            // Auto-shoot bubbles
+            if (time > this.lastCompanionShot + CONFIG.companion.shootInterval) {
+                this.shootBubble();
+                this.lastCompanionShot = time;
+            }
+        }
+
+        // Update bubbles
+        this.bubbles.getChildren().forEach(bubble => {
+            bubble.x += bubble.velocity;
+            if (bubble.x > 850) { bubble.destroy(); return; }
+
+            // Hit enemies
+            this.enemies.getChildren().forEach(enemy => {
+                if (!enemy.active) return;
+                const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, enemy.x, enemy.y);
+                if (dist < bubble.hitRadius + enemy.hitRadius) {
+                    this.hitEnemy(enemy, bubble);
+                }
+            });
+
+            // Hit boss
+            if (this.boss && this.boss.active) {
+                const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, this.boss.x, this.boss.y);
+                if (dist < bubble.hitRadius + this.boss.hitRadius) {
+                    this.hitBoss(bubble);
+                }
+            }
+
+            // Hit second boss
+            if (this.secondBoss && this.secondBoss.active) {
+                const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, this.secondBoss.x, this.secondBoss.y);
+                if (dist < bubble.hitRadius + this.secondBoss.hitRadius) {
+                    this.hitSecondBoss(bubble);
+                }
+            }
+        });
     }
 
     updatePlayer() {
@@ -1656,8 +1963,23 @@ export class GameScene extends Phaser.Scene {
 
             enemy.destroy();
 
-            if (this.enemiesKilled >= CONFIG.bosses.megaShark.spawnKillCount && !this.bossActive && !this.bossDefeated) {
-                this.spawnBoss();
+            // Trigger mine wave before boss (at 20 kills, boss spawns at 25)
+            if (this.enemiesKilled >= 20 && !this.mineWaveTriggered) {
+                const shouldTrigger = (this.currentLevel === 1 && !this.bossDefeated) ||
+                                     (this.currentLevel === 2 && !this.secondBossDefeated);
+                if (shouldTrigger) {
+                    this.mineWaveTriggered = true;
+                    this.spawnMineWave();
+                }
+            }
+
+            // Spawn appropriate boss based on level
+            if (this.enemiesKilled >= CONFIG.bosses.megaShark.spawnKillCount && !this.bossActive) {
+                if (this.currentLevel === 1 && !this.bossDefeated) {
+                    this.spawnBoss();
+                } else if (this.currentLevel === 2 && !this.secondBossDefeated) {
+                    this.spawnOctopusBoss();
+                }
             }
         }
     }
@@ -1681,8 +2003,23 @@ export class GameScene extends Phaser.Scene {
 
         enemy.destroy();
 
-        if (this.enemiesKilled >= CONFIG.bosses.megaShark.spawnKillCount && !this.bossActive && !this.bossDefeated) {
-            this.spawnBoss();
+        // Trigger mine wave before boss (at 20 kills, boss spawns at 25)
+        if (this.enemiesKilled >= 20 && !this.mineWaveTriggered) {
+            const shouldTrigger = (this.currentLevel === 1 && !this.bossDefeated) ||
+                                 (this.currentLevel === 2 && !this.secondBossDefeated);
+            if (shouldTrigger) {
+                this.mineWaveTriggered = true;
+                this.spawnMineWave();
+            }
+        }
+
+        // Spawn appropriate boss based on level
+        if (this.enemiesKilled >= CONFIG.bosses.megaShark.spawnKillCount && !this.bossActive) {
+            if (this.currentLevel === 1 && !this.bossDefeated) {
+                this.spawnBoss();
+            } else if (this.currentLevel === 2 && !this.secondBossDefeated) {
+                this.spawnOctopusBoss();
+            }
         }
     }
 
@@ -1725,11 +2062,16 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: victory, scale: 1.3, alpha: 0, duration: 2000, onComplete: () => victory.destroy() });
 
         this.enemiesKilled = 0;
+        this.mineWaveTriggered = false;  // Reset for level 2
 
-        // Spawn octopus boss after megashark
+        // Transition to Level 2
         if (!this.secondBossDefeated) {
-            this.time.delayedCall(3000, () => {
-                this.spawnOctopusBoss();
+            this.time.delayedCall(2500, () => {
+                this.currentLevel = 2;
+                this.showLevelIndicator(2);
+
+                // Spawn octopus boss after level 2 enemies
+                // Will trigger when enemiesKilled reaches threshold again
             });
         }
     }
@@ -1808,11 +2150,6 @@ export class GameScene extends Phaser.Scene {
                 msg = 'TRIPLE SHOT!';
                 this.time.delayedCall(CONFIG.powerups.firepower.duration, () => { this.firepower = 1; });
                 break;
-            case 'speed':
-                this.player.speed = CONFIG.player.boostedSpeed;
-                msg = 'SPEED BOOST!';
-                this.time.delayedCall(CONFIG.powerups.speed.duration, () => { this.player.speed = CONFIG.player.speed; });
-                break;
             case 'shield':
                 this.shieldActive = true;
                 msg = 'SHIELD!';
@@ -1828,6 +2165,10 @@ export class GameScene extends Phaser.Scene {
                 msg = 'FIREBALL!';
                 this.time.delayedCall(CONFIG.powerups.fireball.duration, () => { this.fireballActive = false; });
                 break;
+            case 'companion':
+                this.activateCompanion();
+                msg = 'COMPANION!';
+                break;
         }
 
         const txt = this.add.text(400, 150, msg, {
@@ -1841,6 +2182,12 @@ export class GameScene extends Phaser.Scene {
 
     playerHit(enemy) {
         enemy.hit = true;
+
+        // God mode - no damage
+        if (this.godMode) {
+            this.cameras.main.shake(50, 0.005);
+            return;
+        }
 
         if (this.shieldActive) {
             this.shieldActive = false;
@@ -1859,6 +2206,81 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.shake(200, 0.015);
 
         if (this.health <= 0) this.gameOver();
+    }
+
+    /**
+     * Activates the companion fish powerup
+     */
+    activateCompanion() {
+        // If already active, just refresh the timer
+        if (this.companionActive && this.companion) {
+            // Cancel existing timer and start new one
+            return;
+        }
+
+        this.companionActive = true;
+
+        // Create companion sprite
+        this.companion = this.add.sprite(
+            this.player.x - 30,
+            this.player.y + CONFIG.companion.offsetY,
+            'companion'
+        )
+            .setDepth(CONFIG.player.depth - 1)
+            .setScale(CONFIG.companion.scale);
+
+        if (this.anims.exists('companion-swim')) {
+            this.companion.play('companion-swim');
+        }
+
+        // Set timer to deactivate
+        this.time.delayedCall(CONFIG.powerups.companion.duration, () => {
+            this.deactivateCompanion();
+        });
+    }
+
+    /**
+     * Deactivates the companion
+     */
+    deactivateCompanion() {
+        this.companionActive = false;
+        if (this.companion) {
+            // Fade out effect
+            this.tweens.add({
+                targets: this.companion,
+                alpha: 0,
+                duration: 500,
+                onComplete: () => {
+                    if (this.companion) {
+                        this.companion.destroy();
+                        this.companion = null;
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Companion shoots a bubble projectile
+     */
+    shootBubble() {
+        if (!this.companion) return;
+
+        const bubble = this.add.sprite(
+            this.companion.x + 30,
+            this.companion.y,
+            'bubble'
+        )
+            .setDepth(CONFIG.bullets.depth)
+            .setScale(2);
+
+        if (this.anims.exists('bubble-pop')) {
+            bubble.play('bubble-pop');
+        }
+
+        bubble.velocity = CONFIG.companion.bubbleSpeed;
+        bubble.hitRadius = CONFIG.companion.bubbleHitRadius;
+        this.bubbles.add(bubble);
     }
 
     gameOver() {

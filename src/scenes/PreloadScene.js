@@ -79,6 +79,21 @@ export class PreloadScene extends Phaser.Scene {
         });
         // Mine: 45x45 single sprite
         this.load.image('mine', 'assets/sprites/enemies/mine.png');
+        // FishBig: 216x49 = 4 frames of 54x49
+        this.load.spritesheet('fishbig', 'assets/sprites/enemies/fishbig.png', {
+            frameWidth: 54,
+            frameHeight: 49
+        });
+        // FishDart: 156x20 = 6 frames of 26x20
+        this.load.spritesheet('fishdart', 'assets/sprites/enemies/fishdart.png', {
+            frameWidth: 26,
+            frameHeight: 20
+        });
+        // Fish: 128x32 = 4 frames of 32x32
+        this.load.spritesheet('fish', 'assets/sprites/enemies/fish.png', {
+            frameWidth: 32,
+            frameHeight: 32
+        });
 
         // Load effects
         // Explosion: 1008x128 = 9 frames of 112x128
@@ -98,6 +113,16 @@ export class PreloadScene extends Phaser.Scene {
         this.load.spritesheet('fireball', 'assets/sprites/items/fireball.png', {
             frameWidth: 26,
             frameHeight: 29
+        });
+        // Companion fish: 128x64 = 8x4 grid of 16x16 frames
+        this.load.spritesheet('companion', 'assets/sprites/items/companion.png', {
+            frameWidth: 16,
+            frameHeight: 16
+        });
+        // Bubble: 80x8 = 10 frames of 8x8
+        this.load.spritesheet('bubble', 'assets/sprites/items/bubble.png', {
+            frameWidth: 8,
+            frameHeight: 8
         });
 
         // Load audio
@@ -196,6 +221,46 @@ export class PreloadScene extends Phaser.Scene {
         this.anims.create({
             key: 'fireball-fly',
             frames: this.anims.generateFrameNumbers('fireball', { start: 0, end: 5 }),
+            frameRate: 12,
+            repeat: -1
+        });
+
+        // Companion fish: first row (frames 0-7) swimming
+        this.anims.create({
+            key: 'companion-swim',
+            frames: this.anims.generateFrameNumbers('companion', { start: 0, end: 7 }),
+            frameRate: 10,
+            repeat: -1
+        });
+
+        // FishBig: 4 frames swimming
+        this.anims.create({
+            key: 'fishbig-swim',
+            frames: this.anims.generateFrameNumbers('fishbig', { start: 0, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+        });
+
+        // FishDart: 6 frames swimming
+        this.anims.create({
+            key: 'fishdart-swim',
+            frames: this.anims.generateFrameNumbers('fishdart', { start: 0, end: 5 }),
+            frameRate: 12,
+            repeat: -1
+        });
+
+        // Fish: 4 frames swimming
+        this.anims.create({
+            key: 'fish-swim',
+            frames: this.anims.generateFrameNumbers('fish', { start: 0, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+        });
+
+        // Bubble: 10 frames animation
+        this.anims.create({
+            key: 'bubble-pop',
+            frames: this.anims.generateFrameNumbers('bubble', { start: 0, end: 9 }),
             frameRate: 12,
             repeat: -1
         });

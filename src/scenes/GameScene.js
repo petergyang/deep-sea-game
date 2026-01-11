@@ -108,6 +108,13 @@ const CONFIG = {
     audio: {
         musicVolume: 0.7,
         sfxVolume: 0.6
+    },
+
+    // Combo system
+    combo: {
+        timeWindow: 2000,      // 2 seconds to chain kills
+        maxMultiplier: 8,      // Maximum combo multiplier
+        decayWarning: 500      // Flash warning when combo about to expire
     }
 };
 
@@ -142,6 +149,12 @@ export class GameScene extends Phaser.Scene {
         this.isMobile = false;
         this.touchTarget = null;
         this.isPaused = false;
+
+        // Combo system state
+        this.comboCount = 0;
+        this.comboMultiplier = 1;
+        this.comboTimer = 0;
+        this.lastKillTime = 0;
     }
 
     /**
@@ -559,6 +572,22 @@ export class GameScene extends Phaser.Scene {
             fontSize: '14px',
             color: '#88ccff'
         }).setDepth(500);
+
+        // Combo UI
+        this.comboContainer = this.add.container(width / 2, 50).setDepth(500);
+        this.comboContainer.setAlpha(0);
+
+        this.comboText = this.add.text(0, 0, '', {
+            fontFamily: 'Impact, Arial Black, sans-serif',
+            fontSize: '32px',
+            color: '#ffff00',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        this.comboContainer.add(this.comboText);
+
+        this.comboTimerBar = this.add.graphics();
+        this.comboContainer.add(this.comboTimerBar);
     }
 
     /**
@@ -600,6 +629,117 @@ export class GameScene extends Phaser.Scene {
         const healthColor = healthPercent > 0.5 ? 0x44ff44 : healthPercent > 0.25 ? 0xffaa00 : 0xff4444;
         this.healthBar.fillStyle(healthColor, 1);
         this.healthBar.fillRoundedRect(width - 118, 22, 96 * healthPercent, 16, 4);
+    }
+
+    /**
+     * Adds a kill to the combo chain and returns multiplied points
+     * @param {number} basePoints - Base points for the kill
+     * @returns {number} Points after combo multiplier applied
+     */
+    addComboKill(basePoints) {
+        const now = this.time.now;
+
+        // Check if within combo window
+        if (now - this.lastKillTime < CONFIG.combo.timeWindow) {
+            this.comboCount++;
+            this.comboMultiplier = Math.min(
+                1 + Math.floor(this.comboCount / 2),
+                CONFIG.combo.maxMultiplier
+            );
+        } else {
+            // Start new combo
+            this.comboCount = 1;
+            this.comboMultiplier = 1;
+        }
+
+        this.lastKillTime = now;
+        this.comboTimer = CONFIG.combo.timeWindow;
+
+        const multipliedPoints = basePoints * this.comboMultiplier;
+        this.updateComboUI();
+
+        return multipliedPoints;
+    }
+
+    /**
+     * Updates the combo UI display
+     */
+    updateComboUI() {
+        if (this.comboCount < 2) {
+            this.comboContainer.setAlpha(0);
+            return;
+        }
+
+        this.comboContainer.setAlpha(1);
+
+        // Update text
+        const multiplierText = this.comboMultiplier > 1 ? `x${this.comboMultiplier}` : '';
+        this.comboText.setText(`${this.comboCount} HIT COMBO! ${multiplierText}`);
+
+        // Color based on multiplier
+        const colors = ['#ffff00', '#ffaa00', '#ff6600', '#ff0066', '#ff00ff', '#00ffff', '#00ff00', '#ffffff'];
+        const colorIndex = Math.min(this.comboMultiplier - 1, colors.length - 1);
+        this.comboText.setColor(colors[colorIndex]);
+
+        // Pulse effect on new combo hit
+        this.tweens.add({
+            targets: this.comboText,
+            scale: 1.3,
+            duration: 100,
+            yoyo: true,
+            ease: 'Power2'
+        });
+    }
+
+    /**
+     * Updates combo timer bar and handles combo expiry
+     * @param {number} delta - Time since last frame
+     */
+    updateComboTimer(delta) {
+        if (this.comboCount < 2) return;
+
+        this.comboTimer -= delta;
+
+        // Draw timer bar
+        const barWidth = 100;
+        const barHeight = 6;
+        const progress = Math.max(0, this.comboTimer / CONFIG.combo.timeWindow);
+
+        this.comboTimerBar.clear();
+        this.comboTimerBar.fillStyle(0x333333, 0.8);
+        this.comboTimerBar.fillRoundedRect(-barWidth / 2, 20, barWidth, barHeight, 2);
+
+        // Color changes as timer runs out
+        const timerColor = this.comboTimer < CONFIG.combo.decayWarning ? 0xff0000 : 0x00ff00;
+        this.comboTimerBar.fillStyle(timerColor, 1);
+        this.comboTimerBar.fillRoundedRect(-barWidth / 2 + 1, 21, (barWidth - 2) * progress, barHeight - 2, 2);
+
+        // Flash warning when about to expire
+        if (this.comboTimer < CONFIG.combo.decayWarning && this.comboTimer > 0) {
+            this.comboContainer.setAlpha(0.5 + Math.sin(this.time.now / 50) * 0.5);
+        }
+
+        // Combo expired
+        if (this.comboTimer <= 0) {
+            this.resetCombo();
+        }
+    }
+
+    /**
+     * Resets the combo state
+     */
+    resetCombo() {
+        if (this.comboCount >= 2) {
+            // Fade out combo UI
+            this.tweens.add({
+                targets: this.comboContainer,
+                alpha: 0,
+                duration: 300
+            });
+        }
+        this.comboCount = 0;
+        this.comboMultiplier = 1;
+        this.comboTimer = 0;
     }
 
     shootBullet() {
@@ -1316,7 +1456,8 @@ export class GameScene extends Phaser.Scene {
                 const dist = Phaser.Math.Distance.Between(mine.x, mine.y, bullet.x, bullet.y);
                 if (dist < mine.hitRadius + bullet.hitRadius) {
                     this.createExplosion(mine.x, mine.y, 0.8);
-                    this.score += CONFIG.mines.points;
+                    const points = this.addComboKill(CONFIG.mines.points);
+                    this.score += points;
                     this.scoreText.setText(`Score: ${this.score}`);
                     bullet.destroy();
                     mine.destroy();
@@ -1330,7 +1471,8 @@ export class GameScene extends Phaser.Scene {
                 if (dist < mine.hitRadius + fb.hitRadius) {
                     fb.hitEnemies.add(mine);
                     this.createExplosion(mine.x, mine.y, 0.8);
-                    this.score += CONFIG.mines.points;
+                    const points = this.addComboKill(CONFIG.mines.points);
+                    this.score += points;
                     this.scoreText.setText(`Score: ${this.score}`);
                     mine.destroy();
                 }
@@ -1403,6 +1545,9 @@ export class GameScene extends Phaser.Scene {
             this.shieldGraphics.strokeCircle(this.player.x, this.player.y, 30);
             this.shieldGraphics.setVisible(true);
         }
+
+        // Update combo timer
+        this.updateComboTimer(delta);
     }
 
     updatePlayer() {
@@ -1495,12 +1640,17 @@ export class GameScene extends Phaser.Scene {
 
         if (enemy.health <= 0) {
             this.enemiesKilled++;
-            this.score += enemy.points;
+
+            // Apply combo multiplier
+            const points = this.addComboKill(enemy.points);
+            this.score += points;
             this.scoreText.setText(`Score: ${this.score}`);
             this.createExplosion(enemy.x, enemy.y);
 
-            const popup = this.add.text(enemy.x, enemy.y, `+${enemy.points}`, {
-                fontSize: '20px', color: '#ffff00', stroke: '#000', strokeThickness: 2
+            // Show points with combo indicator
+            const comboText = this.comboMultiplier > 1 ? ` x${this.comboMultiplier}` : '';
+            const popup = this.add.text(enemy.x, enemy.y, `+${points}${comboText}`, {
+                fontSize: '20px', color: this.comboMultiplier > 1 ? '#00ffff' : '#ffff00', stroke: '#000', strokeThickness: 2
             }).setOrigin(0.5).setDepth(200);
             this.tweens.add({ targets: popup, y: enemy.y - 30, alpha: 0, duration: 500, onComplete: () => popup.destroy() });
 
@@ -1515,12 +1665,17 @@ export class GameScene extends Phaser.Scene {
     hitEnemyWithFireball(enemy) {
         // Fireball always kills in one hit (doesn't check health)
         this.enemiesKilled++;
-        this.score += enemy.points;
+
+        // Apply combo multiplier
+        const points = this.addComboKill(enemy.points);
+        this.score += points;
         this.scoreText.setText(`Score: ${this.score}`);
         this.createExplosion(enemy.x, enemy.y);
 
-        const popup = this.add.text(enemy.x, enemy.y, `+${enemy.points}`, {
-            fontSize: '20px', color: '#ff6600', stroke: '#000', strokeThickness: 2
+        // Show points with combo indicator
+        const comboText = this.comboMultiplier > 1 ? ` x${this.comboMultiplier}` : '';
+        const popup = this.add.text(enemy.x, enemy.y, `+${points}${comboText}`, {
+            fontSize: '20px', color: this.comboMultiplier > 1 ? '#00ffff' : '#ff6600', stroke: '#000', strokeThickness: 2
         }).setOrigin(0.5).setDepth(200);
         this.tweens.add({ targets: popup, y: enemy.y - 30, alpha: 0, duration: 500, onComplete: () => popup.destroy() });
 

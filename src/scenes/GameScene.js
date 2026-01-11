@@ -736,7 +736,25 @@ export class GameScene extends Phaser.Scene {
         const { width, height } = this.cameras.main;
         this.bossActive = true;
 
-        // 3-second flashing warning
+        // Red screen overlay for warning
+        const redOverlay = this.add.graphics();
+        redOverlay.fillStyle(0xff0000, 0.3);
+        redOverlay.fillRect(0, 0, width, height);
+        redOverlay.setDepth(350);
+
+        // Pulse the red overlay
+        this.tweens.add({
+            targets: redOverlay,
+            alpha: 0,
+            duration: 200,
+            yoyo: true,
+            repeat: 7,
+            onComplete: () => {
+                redOverlay.destroy();
+            }
+        });
+
+        // 3-second flashing warning text
         const warning = this.add.text(width / 2, height / 2, 'WARNING\nMegalodon approaching', {
             fontSize: '36px',
             fontStyle: 'bold',
@@ -746,7 +764,7 @@ export class GameScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5).setDepth(400);
 
-        // Flashing effect for 3 seconds
+        // Flashing text effect
         this.tweens.add({
             targets: warning,
             alpha: 0.2,
@@ -803,7 +821,25 @@ export class GameScene extends Phaser.Scene {
         this.secondBossActive = true;
         this.bossActive = true;
 
-        // 3-second flashing warning
+        // Red screen overlay for warning
+        const redOverlay = this.add.graphics();
+        redOverlay.fillStyle(0xff0000, 0.3);
+        redOverlay.fillRect(0, 0, width, height);
+        redOverlay.setDepth(350);
+
+        // Pulse the red overlay
+        this.tweens.add({
+            targets: redOverlay,
+            alpha: 0,
+            duration: 200,
+            yoyo: true,
+            repeat: 7,
+            onComplete: () => {
+                redOverlay.destroy();
+            }
+        });
+
+        // 3-second flashing warning text
         const warning = this.add.text(width / 2, height / 2, 'WARNING\nKraken approaching', {
             fontSize: '36px',
             fontStyle: 'bold',
@@ -813,7 +849,7 @@ export class GameScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5).setDepth(400);
 
-        // Flashing effect for 3 seconds
+        // Flashing text effect
         this.tweens.add({
             targets: warning,
             alpha: 0.2,

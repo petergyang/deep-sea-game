@@ -7,7 +7,7 @@ const CONFIG = {
         startX: 100,
         speed: 5,
         boostedSpeed: 9,
-        maxHealth: 3,
+        maxHealth: 5,
         hitRadius: 25,
         shieldRadius: 30,
         depth: 100

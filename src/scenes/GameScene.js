@@ -75,9 +75,9 @@ const CONFIG = {
     // Spawn timers (ms)
     spawnTimers: {
         collectible: 2500,
-        enemy: 1400,
+        enemy: 700,      // 2x faster enemy spawns
         mine: 4000,
-        powerup: 5000,
+        powerup: 2500,   // 2x faster powerup spawns
         difficulty: 15000
     },
 
@@ -1264,7 +1264,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Clamp player position
-        this.player.x = Phaser.Math.Clamp(this.player.x, 40, width * 0.4);
+        this.player.x = Phaser.Math.Clamp(this.player.x, 40, width - 40);
         this.player.y = Phaser.Math.Clamp(this.player.y, 40, height - 40);
     }
 

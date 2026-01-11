@@ -1605,12 +1605,13 @@ export class GameScene extends Phaser.Scene {
 
         // Update harpoons
         this.bullets.getChildren().forEach(h => {
+            if (!h.active) return;
             h.x += h.velocity;
             if (h.x > 850) { h.destroy(); return; }
 
             // Hit enemies
             this.enemies.getChildren().forEach(enemy => {
-                if (!enemy.active) return;
+                if (!enemy.active || !h.active) return;
                 const dist = Phaser.Math.Distance.Between(h.x, h.y, enemy.x, enemy.y);
                 if (dist < h.hitRadius + enemy.hitRadius) {
                     this.hitEnemy(enemy, h);
@@ -1618,7 +1619,7 @@ export class GameScene extends Phaser.Scene {
             });
 
             // Hit boss
-            if (this.boss && this.boss.active) {
+            if (this.boss && this.boss.active && h.active) {
                 const dist = Phaser.Math.Distance.Between(h.x, h.y, this.boss.x, this.boss.y);
                 if (dist < h.hitRadius + this.boss.hitRadius) {
                     this.hitBoss(h);
@@ -1626,7 +1627,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             // Hit second boss (octopus)
-            if (this.secondBoss && this.secondBoss.active) {
+            if (this.secondBoss && this.secondBoss.active && h.active) {
                 const dist = Phaser.Math.Distance.Between(h.x, h.y, this.secondBoss.x, this.secondBoss.y);
                 if (dist < h.hitRadius + this.secondBoss.hitRadius) {
                     this.hitSecondBoss(h);
@@ -1636,6 +1637,7 @@ export class GameScene extends Phaser.Scene {
 
         // Update fireballs (piercing projectiles)
         this.fireballs.getChildren().forEach(fb => {
+            if (!fb.active) return;
             fb.x += fb.velocity;
             if (fb.x > 850) { fb.destroy(); return; }
 
@@ -1827,12 +1829,13 @@ export class GameScene extends Phaser.Scene {
 
         // Update bubbles
         this.bubbles.getChildren().forEach(bubble => {
+            if (!bubble.active) return;
             bubble.x += bubble.velocity;
             if (bubble.x > 850) { bubble.destroy(); return; }
 
             // Hit enemies
             this.enemies.getChildren().forEach(enemy => {
-                if (!enemy.active) return;
+                if (!enemy.active || !bubble.active) return;
                 const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, enemy.x, enemy.y);
                 if (dist < bubble.hitRadius + enemy.hitRadius) {
                     this.hitEnemy(enemy, bubble);
@@ -1840,7 +1843,7 @@ export class GameScene extends Phaser.Scene {
             });
 
             // Hit boss
-            if (this.boss && this.boss.active) {
+            if (this.boss && this.boss.active && bubble.active) {
                 const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, this.boss.x, this.boss.y);
                 if (dist < bubble.hitRadius + this.boss.hitRadius) {
                     this.hitBoss(bubble);
@@ -1848,7 +1851,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             // Hit second boss
-            if (this.secondBoss && this.secondBoss.active) {
+            if (this.secondBoss && this.secondBoss.active && bubble.active) {
                 const dist = Phaser.Math.Distance.Between(bubble.x, bubble.y, this.secondBoss.x, this.secondBoss.y);
                 if (dist < bubble.hitRadius + this.secondBoss.hitRadius) {
                     this.hitSecondBoss(bubble);
@@ -1861,8 +1864,10 @@ export class GameScene extends Phaser.Scene {
         const speed = this.player.speed;
         const { height, width } = this.cameras.main;
 
-        // Virtual joystick controls (mobile)
-        if (this.isMobile && (this.joystickInput.x !== 0 || this.joystickInput.y !== 0)) {
+        // Virtual joystick controls (mobile) - with dead zone
+        const deadZone = 0.15;
+        const hasJoystickInput = Math.abs(this.joystickInput.x) > deadZone || Math.abs(this.joystickInput.y) > deadZone;
+        if (this.isMobile && hasJoystickInput) {
             // Apply joystick input directly
             this.player.x += this.joystickInput.x * speed;
             this.player.y += this.joystickInput.y * speed;
@@ -2202,7 +2207,21 @@ export class GameScene extends Phaser.Scene {
         this.health--;
         this.updateHealthBar();
 
-        this.tweens.add({ targets: this.player, alpha: 0.2, duration: 80, yoyo: true, repeat: 3 });
+        // Stop any existing player alpha tweens to prevent stuck transparency
+        this.tweens.killTweensOf(this.player);
+        this.player.setAlpha(1);  // Reset alpha before starting new tween
+
+        this.tweens.add({
+            targets: this.player,
+            alpha: 0.2,
+            duration: 80,
+            yoyo: true,
+            repeat: 3,
+            onComplete: () => {
+                // Ensure alpha is fully restored
+                if (this.player) this.player.setAlpha(1);
+            }
+        });
         this.cameras.main.shake(200, 0.015);
 
         if (this.health <= 0) this.gameOver();

@@ -36,6 +36,7 @@ Survive waves of sea creatures and defeat two epic bosses:
 
 ## Features
 
+- **Combo System** - Chain kills within 2 seconds to build multipliers up to 8x!
 - Parallax scrolling backgrounds
 - Progressive difficulty
 - High score tracking

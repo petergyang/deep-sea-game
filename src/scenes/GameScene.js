@@ -181,19 +181,33 @@ export class GameScene extends Phaser.Scene {
         // Detect mobile/touch device
         this.isMobile = this.sys.game.device.input.touch;
 
-        // Touch controls - diver follows finger
+        // Virtual joystick state
+        this.joystickInput = { x: 0, y: 0 };
+        this.fireButtonPressed = false;
+
+        // Set up mobile controls if on touch device
+        if (this.isMobile) {
+            this.setupMobileControls();
+        }
+
+        // Fallback touch controls for non-joystick areas (legacy support)
         this.input.on('pointerdown', (pointer) => {
-            this.touchTarget = { x: pointer.x, y: pointer.y };
+            if (!this.isMobile) {
+                this.touchTarget = { x: pointer.x, y: pointer.y };
+            }
+            this.showTouchIndicator(pointer.x, pointer.y);
         });
 
         this.input.on('pointermove', (pointer) => {
-            if (pointer.isDown) {
+            if (pointer.isDown && !this.isMobile) {
                 this.touchTarget = { x: pointer.x, y: pointer.y };
             }
         });
 
         this.input.on('pointerup', () => {
-            this.touchTarget = null;
+            if (!this.isMobile) {
+                this.touchTarget = null;
+            }
         });
 
         // UI
@@ -342,6 +356,129 @@ export class GameScene extends Phaser.Scene {
             this.tweens.resumeAll();
             this.time.paused = false;
         }
+    }
+
+    /**
+     * Sets up mobile virtual joystick and button controls
+     */
+    setupMobileControls() {
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickThumb = document.getElementById('joystick-thumb');
+        const fireButton = document.getElementById('fire-button');
+        const pauseButton = document.getElementById('pause-button-mobile');
+
+        if (!joystickBase || !joystickThumb) return;
+
+        const joystickRadius = 60; // Half of joystick base width
+        const thumbRadius = 25;    // Half of thumb width
+        const maxDistance = joystickRadius - thumbRadius;
+
+        let joystickActive = false;
+        let joystickStartX = 0;
+        let joystickStartY = 0;
+
+        // Joystick touch handlers
+        const handleJoystickStart = (e) => {
+            e.preventDefault();
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = joystickBase.getBoundingClientRect();
+            joystickStartX = rect.left + joystickRadius;
+            joystickStartY = rect.top + joystickRadius;
+            joystickActive = true;
+            this.handleJoystickMove(touch, joystickStartX, joystickStartY, maxDistance, joystickThumb);
+        };
+
+        const handleJoystickMove = (e) => {
+            if (!joystickActive) return;
+            e.preventDefault();
+            const touch = e.touches ? e.touches[0] : e;
+            this.handleJoystickMove(touch, joystickStartX, joystickStartY, maxDistance, joystickThumb);
+        };
+
+        const handleJoystickEnd = (e) => {
+            e.preventDefault();
+            joystickActive = false;
+            this.joystickInput = { x: 0, y: 0 };
+            joystickThumb.style.transform = 'translate(0, 0)';
+        };
+
+        joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
+        joystickBase.addEventListener('touchmove', handleJoystickMove, { passive: false });
+        joystickBase.addEventListener('touchend', handleJoystickEnd, { passive: false });
+        joystickBase.addEventListener('touchcancel', handleJoystickEnd, { passive: false });
+
+        // Fire button handlers
+        if (fireButton) {
+            fireButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.fireButtonPressed = true;
+                this.showTouchIndicator(window.innerWidth - 90, window.innerHeight - 90);
+            }, { passive: false });
+
+            fireButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.fireButtonPressed = false;
+            }, { passive: false });
+
+            fireButton.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                this.fireButtonPressed = false;
+            }, { passive: false });
+        }
+
+        // Pause button handler
+        if (pauseButton) {
+            pauseButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.togglePause();
+            }, { passive: false });
+        }
+    }
+
+    /**
+     * Handles joystick movement and updates input state
+     */
+    handleJoystickMove(touch, centerX, centerY, maxDistance, thumbElement) {
+        const deltaX = touch.clientX - centerX;
+        const deltaY = touch.clientY - centerY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        let clampedX = deltaX;
+        let clampedY = deltaY;
+
+        if (distance > maxDistance) {
+            clampedX = (deltaX / distance) * maxDistance;
+            clampedY = (deltaY / distance) * maxDistance;
+        }
+
+        // Update thumb position
+        thumbElement.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+
+        // Normalize to -1 to 1 range
+        this.joystickInput = {
+            x: clampedX / maxDistance,
+            y: clampedY / maxDistance
+        };
+    }
+
+    /**
+     * Shows a visual touch indicator at the given position
+     */
+    showTouchIndicator(x, y) {
+        const indicator = document.getElementById('touch-indicator');
+        if (!indicator) return;
+
+        // Clone and show indicator for animation
+        const newIndicator = indicator.cloneNode(true);
+        newIndicator.style.display = 'block';
+        newIndicator.style.left = `${x}px`;
+        newIndicator.style.top = `${y}px`;
+        document.body.appendChild(newIndicator);
+
+        // Remove after animation
+        setTimeout(() => {
+            newIndicator.remove();
+        }, 500);
     }
 
     createBackgrounds() {
@@ -1052,8 +1189,8 @@ export class GameScene extends Phaser.Scene {
         // Player movement
         this.updatePlayer();
 
-        // Fire - keyboard (spacebar) or auto-fire when touching on mobile
-        const shouldFire = this.wasd.fire.isDown || this.touchTarget;
+        // Fire - keyboard (spacebar), fire button, or auto-fire when touching on mobile
+        const shouldFire = this.wasd.fire.isDown || this.fireButtonPressed || this.touchTarget;
         if (shouldFire && time > this.lastFired + this.fireRate) {
             if (this.fireballActive) {
                 this.shootFireball();
@@ -1272,8 +1409,14 @@ export class GameScene extends Phaser.Scene {
         const speed = this.player.speed;
         const { height, width } = this.cameras.main;
 
-        // Touch/mobile controls - diver moves toward finger
-        if (this.touchTarget) {
+        // Virtual joystick controls (mobile)
+        if (this.isMobile && (this.joystickInput.x !== 0 || this.joystickInput.y !== 0)) {
+            // Apply joystick input directly
+            this.player.x += this.joystickInput.x * speed;
+            this.player.y += this.joystickInput.y * speed;
+        }
+        // Legacy touch controls - diver moves toward finger (for devices without visible joystick)
+        else if (this.touchTarget) {
             const dx = this.touchTarget.x - this.player.x;
             const dy = this.touchTarget.y - this.player.y;
             const dist = Math.sqrt(dx * dx + dy * dy);

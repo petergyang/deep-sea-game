@@ -11,6 +11,25 @@
 </head>
 <body>
     <div id="game-container"></div>
+
+    <!-- Rotate device overlay for portrait mode -->
+    <div id="rotate-overlay">
+        <div class="rotate-content">
+            <div class="rotate-icon">📱</div>
+            <div class="rotate-arrow">↻</div>
+            <p>Please rotate your device</p>
+        </div>
+    </div>
+
+    <!-- Mobile controls -->
+    <div id="joystick-container">
+        <div id="joystick-base"></div>
+        <div id="joystick-thumb"></div>
+    </div>
+    <div id="fire-button">🔥</div>
+    <div id="pause-button-mobile">⏸</div>
+    <div id="touch-indicator"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     <script type="module" src="src/main.js"></script>
 </body>

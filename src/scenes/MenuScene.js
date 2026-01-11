@@ -94,8 +94,11 @@ export class MenuScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5).setDepth(15);
 
+        // Detect mobile
+        const isMobile = this.sys.game.device.input.touch;
+
         // Blinking "PRESS START" text - classic arcade style
-        const startText = this.add.text(width / 2, height * 0.72, 'CLICK TO START', {
+        const startText = this.add.text(width / 2, height * 0.72, isMobile ? 'TAP TO START' : 'CLICK TO START', {
             fontFamily: 'Courier New, monospace',
             fontSize: '28px',
             color: '#ffff00'
@@ -109,18 +112,32 @@ export class MenuScene extends Phaser.Scene {
             repeat: -1
         });
 
-        // Instructions
-        this.add.text(width / 2, height * 0.82, 'ARROWS/WASD: MOVE    SPACE: FIRE', {
-            fontFamily: 'Courier New, monospace',
-            fontSize: '16px',
-            color: '#88ffff'
-        }).setOrigin(0.5);
+        // Instructions - show different controls for mobile vs desktop
+        if (isMobile) {
+            this.add.text(width / 2, height * 0.82, 'LEFT: JOYSTICK    RIGHT: FIRE', {
+                fontFamily: 'Courier New, monospace',
+                fontSize: '16px',
+                color: '#88ffff'
+            }).setOrigin(0.5);
 
-        this.add.text(width / 2, height * 0.87, 'TOUCH: MOVE & AUTO-FIRE', {
-            fontFamily: 'Courier New, monospace',
-            fontSize: '14px',
-            color: '#88ffff'
-        }).setOrigin(0.5);
+            this.add.text(width / 2, height * 0.87, 'ROTATE DEVICE TO LANDSCAPE', {
+                fontFamily: 'Courier New, monospace',
+                fontSize: '14px',
+                color: '#ff8844'
+            }).setOrigin(0.5);
+        } else {
+            this.add.text(width / 2, height * 0.82, 'ARROWS/WASD: MOVE    SPACE: FIRE', {
+                fontFamily: 'Courier New, monospace',
+                fontSize: '16px',
+                color: '#88ffff'
+            }).setOrigin(0.5);
+
+            this.add.text(width / 2, height * 0.87, 'ESC/P: PAUSE', {
+                fontFamily: 'Courier New, monospace',
+                fontSize: '14px',
+                color: '#88ffff'
+            }).setOrigin(0.5);
+        }
 
         // High score display - arcade style
         const highScore = localStorage.getItem('dragonHighScore') || 0;
